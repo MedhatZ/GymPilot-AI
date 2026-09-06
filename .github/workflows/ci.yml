@@ -1,0 +1,32 @@
+name: GymCoach CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+      - run: dotnet test
+        working-directory: backend
+
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+        working-directory: mobile/gymcoach
+      - run: dart run build_runner build
+        working-directory: mobile/gymcoach
+      - run: flutter analyze
+        working-directory: mobile/gymcoach
+      - run: flutter test
+        working-directory: mobile/gymcoach

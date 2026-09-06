@@ -1,0 +1,49 @@
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDEs
+.vs/
+.idea/
+*.user
+*.suo
+.vscode/*
+!.vscode/extensions.json
+
+# .NET
+**/bin/
+**/obj/
+**/out/
+*.DotSettings.user
+appsettings.*.local.json
+**/secrets.json
+
+# Flutter
+mobile/gymcoach/.dart_tool/
+mobile/gymcoach/.packages
+mobile/gymcoach/build/
+mobile/gymcoach/.flutter-plugins
+mobile/gymcoach/.flutter-plugins-dependencies
+mobile/gymcoach/.pub-cache/
+mobile/gymcoach/.pub/
+**/Generated.xcconfig
+**/flutter_export_environment.sh
+**/*.iml
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.keystore
+google-services.json
+GoogleService-Info.plist
+appsettings.Development.local.json
+**/secrets.json
+
+# Misc
+*.log
+coverage/
+TestResults/
