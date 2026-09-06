@@ -4,9 +4,9 @@
 /// require the ASP.NET API (see docs/standalone-personal-mode.md).
 class AppConfig {
   const AppConfig({
-    this.personalMode = true,
+    this.personalMode = false,
     /// Used only when personalMode is false (cloud mode).
-    this.apiBaseUrl = 'http://10.0.2.2:5080',
+    this.apiBaseUrl = 'https://gympilot-ai.onrender.com',
     this.defaultWeightIncrementKg = 2.5,
     this.units = 'kg',
   });

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -26,6 +27,25 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     super.dispose();
   }
 
+  String _friendlyError(Object e) {
+    if (e is DioException) {
+      final data = e.response?.data;
+      if (data is Map && data['error'] != null) return data['error'].toString();
+      if (data is Map && data['title'] != null) return data['title'].toString();
+      if (e.response?.statusCode == 401) return 'Invalid email or password.';
+      if (e.response?.statusCode == 400) {
+        return 'Could not create account. Check email/password (min 8 characters).';
+      }
+      if (e.type == DioExceptionType.connectionError) {
+        return 'No internet or server unreachable. Check connection and try again.';
+      }
+      if (e.response?.statusCode == 500) {
+        return 'Server error. If this email is already registered, tap Sign in instead.';
+      }
+    }
+    return e.toString();
+  }
+
   Future<void> _submit() async {
     setState(() {
       _busy = true;
@@ -39,7 +59,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         await auth.login(_email.text.trim(), _password.text);
       }
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = _friendlyError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -62,7 +82,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             if (_register) const SizedBox(height: 12),
             TextField(controller: _email, decoration: const InputDecoration(labelText: 'Email'), keyboardType: TextInputType.emailAddress),
             const SizedBox(height: 12),
-            TextField(controller: _password, decoration: const InputDecoration(labelText: 'Password'), obscureText: true),
+            TextField(controller: _password, decoration: const InputDecoration(labelText: 'Password (min 8)'), obscureText: true),
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),

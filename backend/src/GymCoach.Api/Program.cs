@@ -97,8 +97,16 @@ string UserId(ClaimsPrincipal user) =>
 
 app.MapPost("/api/auth/register", async (RegisterRequest req, IAuthService auth, CancellationToken ct) =>
 {
-    var result = await auth.RegisterAsync(req, ct);
-    return Results.Ok(result);
+    try
+    {
+        var result = await auth.RegisterAsync(req, ct);
+        return Results.Ok(result);
+    }
+    catch (InvalidOperationException ex)
+    {
+        // Duplicate email / password policy → 400 (not opaque 500)
+        return Results.BadRequest(new { error = ex.Message });
+    }
 });
 
 app.MapPost("/api/auth/login", async (LoginRequest req, IAuthService auth, CancellationToken ct) =>
