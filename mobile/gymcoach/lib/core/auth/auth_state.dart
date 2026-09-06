@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/repositories/repository_providers.dart';
+import '../../data/repositories/repository_contracts.dart';
 import '../config/personal_mode_service.dart';
 import '../network/api_client.dart';
 import 'token_storage.dart';
@@ -26,12 +28,13 @@ class AuthState {
 }
 
 class AuthController extends StateNotifier<AuthState> {
-  AuthController(this._api, this._tokens, this._personal)
+  AuthController(this._api, this._tokens, this._personal, this._onboarding)
       : super(const AuthState(status: AuthStatus.unknown));
 
   final ApiClient _api;
   final TokenStorage _tokens;
   final PersonalModeService _personal;
+  final OnboardingRepository _onboarding;
 
   Future<void> bootstrap() async {
     if (_personal.isEnabled) {
@@ -44,38 +47,27 @@ class AuthController extends StateNotifier<AuthState> {
       state = const AuthState(status: AuthStatus.signedOut);
       return;
     }
-    await _loadProfileStatus();
+    await _loadCloudProfileStatus();
   }
 
+  /// Personal Mode: fully on-device. Never calls personal-bootstrap or backend.
   Future<void> _bootstrapPersonal() async {
-    try {
-      var token = await _tokens.readAccessToken();
-      if (token == null) {
-        final res = await _api.dio.post('/api/auth/personal-bootstrap');
-        await _tokens.saveTokens(
-          access: res.data['accessToken'] as String,
-          refresh: res.data['refreshToken'] as String,
-        );
-      }
-      await _loadProfileStatus();
-    } catch (_) {
-      // Offline personal: allow setup/workout locally; mark needsOnboarding if no token path
-      final token = await _tokens.readAccessToken();
-      if (token == null) {
-        state = const AuthState(status: AuthStatus.needsOnboarding, email: 'personal');
-      } else {
-        state = const AuthState(status: AuthStatus.signedIn, email: 'personal');
-      }
-    }
+    final complete = await _onboarding.isOnboardingComplete();
+    final profile = await _onboarding.getProfile();
+    state = AuthState(
+      status: complete ? AuthStatus.signedIn : AuthStatus.needsOnboarding,
+      email: profile?['displayName']?.toString() ?? 'personal',
+      userId: 'personal-local',
+    );
   }
 
-  Future<void> _loadProfileStatus() async {
+  Future<void> _loadCloudProfileStatus() async {
     try {
-      final me = await _api.dio.get('/api/onboarding/me');
-      final completed = me.data['onboardingCompleted'] == true;
+      final complete = await _onboarding.isOnboardingComplete();
+      final profile = await _onboarding.getProfile();
       state = AuthState(
-        status: completed ? AuthStatus.signedIn : AuthStatus.needsOnboarding,
-        email: me.data['displayName']?.toString(),
+        status: complete ? AuthStatus.signedIn : AuthStatus.needsOnboarding,
+        email: profile?['displayName']?.toString(),
       );
     } catch (_) {
       state = const AuthState(status: AuthStatus.needsOnboarding);
@@ -108,7 +100,7 @@ class AuthController extends StateNotifier<AuthState> {
       access: res.data['accessToken'] as String,
       refresh: res.data['refreshToken'] as String,
     );
-    await _loadProfileStatus();
+    await _loadCloudProfileStatus();
   }
 
   Future<void> markOnboarded() async {
@@ -117,7 +109,6 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> signOut() async {
     if (_personal.isEnabled) {
-      // Personal mode: never dump user to login; re-bootstrap.
       await bootstrap();
       return;
     }
@@ -132,6 +123,7 @@ final authControllerProvider =
     ref.watch(apiClientProvider),
     ref.watch(tokenStorageProvider),
     ref.watch(personalModeServiceProvider),
+    ref.watch(onboardingRepositoryProvider),
   );
 });
 

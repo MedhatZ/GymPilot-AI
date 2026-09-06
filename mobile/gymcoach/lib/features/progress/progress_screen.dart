@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gymcoach/l10n/app_localizations.dart';
 
-import '../../core/network/api_client.dart';
+import '../../data/repositories/repository_providers.dart';
 
 final progressProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   try {
-    final res = await ref.watch(apiClientProvider).dio.get('/api/progress');
-    return Map<String, dynamic>.from(res.data as Map);
+    return await ref.watch(progressRepositoryProvider).getOverview();
   } catch (_) {
-    return null;
+    return {
+      'exercises': <Map>[],
+      'recentPrs': <Map>[],
+      'recovery': {'readinessScore': 70, 'label': 'moderate'},
+    };
   }
 });
 
@@ -17,16 +21,17 @@ class ProgressScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final progress = ref.watch(progressProvider);
     return DefaultTabController(
       length: 3,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Progress'),
-          bottom: const TabBar(tabs: [
-            Tab(text: 'Overview'),
-            Tab(text: 'Exercises'),
-            Tab(text: 'History'),
+          title: Text(l10n.progress),
+          bottom: TabBar(tabs: [
+            Tab(text: l10n.overview),
+            Tab(text: l10n.exercises),
+            Tab(text: l10n.history),
           ]),
         ),
         body: progress.when(
@@ -34,7 +39,7 @@ class ProgressScreen extends ConsumerWidget {
           error: (e, _) => Center(child: Text('$e')),
           data: (data) {
             if (data == null) {
-              return const Center(child: Text('Connect to API or keep logging offline to build history.'));
+              return Center(child: Text(l10n.progressEmpty));
             }
             final exercises = (data['exercises'] as List?) ?? [];
             final prs = (data['recentPrs'] as List?) ?? [];
@@ -44,10 +49,14 @@ class ProgressScreen extends ConsumerWidget {
                 ListView(
                   padding: const EdgeInsets.all(20),
                   children: [
-                    Text('Sessions tracked: ${exercises.length} lifts'),
-                    if (recovery != null) Text('Readiness: ${recovery['readinessScore']} (${recovery['label']})'),
+                    Text(l10n.sessionsTracked(exercises.length)),
+                    if (recovery != null)
+                      Text(l10n.readinessWithScore(
+                        recovery['readinessScore'] ?? '—',
+                        recovery['label'] ?? '',
+                      )),
                     const SizedBox(height: 12),
-                    Text('Recent PRs', style: Theme.of(context).textTheme.titleMedium),
+                    Text(l10n.recentPrs, style: Theme.of(context).textTheme.titleMedium),
                     ...prs.map((p) {
                       final m = Map<String, dynamic>.from(p as Map);
                       return ListTile(
@@ -57,7 +66,7 @@ class ProgressScreen extends ConsumerWidget {
                       );
                     }),
                     const SizedBox(height: 8),
-                    const Text('Recommendation: CONTINUE while progression remains positive. No calendar expiration.'),
+                    Text(l10n.continueRecommendation),
                   ],
                 ),
                 ListView(
@@ -66,28 +75,32 @@ class ProgressScreen extends ConsumerWidget {
                     final m = Map<String, dynamic>.from(e as Map);
                     final points = (m['recentE1rmPoints'] as List?) ?? [];
                     final trend = points.length >= 2 && (points.last as num) >= (points.first as num)
-                        ? '↑ progressing'
+                        ? l10n.progressing
                         : points.length >= 2
-                            ? '→ monitor'
+                            ? l10n.monitor
                             : '—';
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(m['name']?.toString() ?? ''),
-                      subtitle: Text('Best ${m['bestWeight'] ?? '-'} kg · e1RM ${m['bestE1rm'] ?? '-'} · $trend'),
+                      subtitle: Text(l10n.bestProgressLine(
+                        m['bestWeight'] ?? '-',
+                        m['bestE1rm'] ?? '-',
+                        trend,
+                      )),
                     );
                   }).toList(),
                 ),
                 ListView(
                   padding: const EdgeInsets.all(20),
                   children: [
-                    const Text('Completed workouts appear after you finish sessions. History is built from real logged work only.'),
+                    Text(l10n.historyHelp),
                     const SizedBox(height: 12),
                     ...exercises.map((e) {
                       final m = Map<String, dynamic>.from(e as Map);
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
                         title: Text(m['name']?.toString() ?? ''),
-                        subtitle: Text('${m['sessionCount']} sessions'),
+                        subtitle: Text(l10n.sessionsCount((m['sessionCount'] as num?)?.toInt() ?? 0)),
                       );
                     }),
                   ],

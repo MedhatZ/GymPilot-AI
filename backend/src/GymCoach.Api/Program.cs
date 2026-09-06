@@ -19,6 +19,13 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Render (and Docker) set PORT dynamically. Local `dotnet run` keeps launchSettings (5080).
+var listenPort = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(listenPort))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{listenPort}");
+}
+
 builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -28,6 +35,14 @@ builder.Services.AddGymCoachInfrastructure(builder.Configuration);
 builder.Services.AddGymCoachApplication();
 
 var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+if (!builder.Environment.IsDevelopment() &&
+    (string.IsNullOrWhiteSpace(jwt.SigningKey) ||
+     jwt.SigningKey.StartsWith("DEV_ONLY", StringComparison.Ordinal)))
+{
+    throw new InvalidOperationException(
+        "Jwt__SigningKey must be set to a long random secret in Production (environment variable).");
+}
+
 builder.Services.AddAuthentication(options =>
     {
         options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;

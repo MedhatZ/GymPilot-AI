@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gymcoach/l10n/app_localizations.dart';
 
-import '../../core/network/api_client.dart';
+import '../../data/repositories/repository_providers.dart';
 
 class _ChatMessage {
   _ChatMessage({required this.text, required this.isUser, this.source, this.confidence});
@@ -20,23 +21,10 @@ class CoachScreen extends ConsumerStatefulWidget {
 
 class _CoachScreenState extends ConsumerState<CoachScreen> {
   final _controller = TextEditingController();
-  final _messages = <_ChatMessage>[
-    _ChatMessage(
-      text: 'Ask about progress, loads, plateaus, or program decisions. Answers are grounded in your logged training data.',
-      isUser: false,
-      source: 'SYSTEM',
-    ),
-  ];
+  final _messages = <_ChatMessage>[];
   var _busy = false;
   String? _error;
-
-  static const _presets = [
-    'Am I progressing?',
-    "Why is today's weight recommended?",
-    'Do I need a deload?',
-    'Should I change my program?',
-    'What improved recently?',
-  ];
+  var _seeded = false;
 
   @override
   void dispose() {
@@ -44,7 +32,19 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
     super.dispose();
   }
 
-  Future<void> _ask(String q) async {
+  void _ensureIntro(AppLocalizations l10n) {
+    if (_seeded) return;
+    _seeded = true;
+    _messages.add(_ChatMessage(text: l10n.coachIntro, isUser: false, source: 'SYSTEM'));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _ensureIntro(AppLocalizations.of(context));
+  }
+
+  Future<void> _ask(String q, AppLocalizations l10n) async {
     final question = q.trim();
     if (question.isEmpty || _busy) return;
     setState(() {
@@ -54,25 +54,20 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
       _controller.clear();
     });
     try {
-      final res = await ref.read(apiClientProvider).dio.post('/api/coach/ask', data: {
-        'question': question,
-        'exerciseId': null,
-      });
-      final data = Map<String, dynamic>.from(res.data as Map);
+      final answer = await ref.read(coachRepositoryProvider).ask(question);
       setState(() {
         _messages.add(_ChatMessage(
-          text: data['answer']?.toString() ?? 'No answer returned.',
+          text: answer.answer,
           isUser: false,
-          source: data['source']?.toString(),
-          confidence: data['confidence'] as num?,
+          source: answer.source,
+          confidence: answer.confidence,
         ));
       });
     } catch (_) {
       setState(() {
-        _error = 'Could not reach coach — showing training-engine fallback.';
+        _error = l10n.coachUnavailable;
         _messages.add(_ChatMessage(
-          text:
-              'Training-engine fallback — keep logging working sets. Program changes require multi-session evidence, not calendar weeks.',
+          text: l10n.coachFallback,
           isUser: false,
           source: 'TRAINING_ENGINE',
         ));
@@ -84,77 +79,86 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final presets = [
+      l10n.presetProgressing,
+      l10n.presetWhyWeight,
+      l10n.presetDeload,
+      l10n.presetChangeProgram,
+      l10n.presetImproved,
+    ];
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Coach')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _presets
-                  .map((q) => ActionChip(label: Text(q), onPressed: _busy ? null : () => _ask(q)))
-                  .toList(),
-            ),
-          ),
-          if (_error != null)
+      resizeToAvoidBottomInset: true,
+      appBar: AppBar(title: Text(l10n.coach)),
+      body: SafeArea(
+        child: Column(
+          children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Text(_error!, style: TextStyle(color: theme.colorScheme.error, fontSize: 13)),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: presets
+                    .map((q) => ActionChip(label: Text(q), onPressed: _busy ? null : () => _ask(q, l10n)))
+                    .toList(),
+              ),
             ),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _messages.length + (_busy ? 1 : 0),
-              itemBuilder: (_, i) {
-                if (_busy && i == _messages.length) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Row(
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Text(_error!, style: TextStyle(color: theme.colorScheme.error, fontSize: 13)),
+              ),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _messages.length + (_busy ? 1 : 0),
+                itemBuilder: (_, i) {
+                  if (_busy && i == _messages.length) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                          const SizedBox(width: 12),
+                          Text(l10n.coachThinking),
+                        ],
+                      ),
+                    );
+                  }
+                  final m = _messages[i];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: Column(
+                      crossAxisAlignment: m.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                       children: [
-                        SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-                        SizedBox(width: 12),
-                        Text('Coach is thinking…'),
+                        Text(
+                          m.isUser ? l10n.you : l10n.coach,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(m.text, style: const TextStyle(fontSize: 16, height: 1.35)),
+                        if (!m.isUser && m.source != null && m.source != 'SYSTEM')
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              m.source == 'OPENAI'
+                                  ? '${l10n.sourceOpenAi}${m.confidence != null ? ' · ${(m.confidence! * 100).round()}%' : ''}'
+                                  : l10n.sourceTrainingEngine,
+                              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                            ),
+                          ),
                       ],
                     ),
                   );
-                }
-                final m = _messages[i];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: Column(
-                    crossAxisAlignment: m.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        m.isUser ? 'You' : 'Coach',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(m.text, style: const TextStyle(fontSize: 16, height: 1.35)),
-                      if (!m.isUser && m.source != null && m.source != 'SYSTEM')
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            m.source == 'OPENAI'
-                                ? 'Source: OpenAI${m.confidence != null ? ' · ${(m.confidence! * 100).round()}%' : ''}'
-                                : 'Source: Training Engine',
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
+                },
+              ),
             ),
-          ),
-          SafeArea(
-            top: false,
-            child: Padding(
+            Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               child: Row(
                 children: [
@@ -163,24 +167,24 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
                       controller: _controller,
                       enabled: !_busy,
                       textInputAction: TextInputAction.send,
-                      onSubmitted: _ask,
-                      decoration: const InputDecoration(
-                        hintText: 'Ask the coach…',
-                        border: OutlineInputBorder(),
+                      onSubmitted: (v) => _ask(v, l10n),
+                      decoration: InputDecoration(
+                        hintText: l10n.askCoachHint,
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   IconButton.filled(
-                    onPressed: _busy ? null : () => _ask(_controller.text),
+                    onPressed: _busy ? null : () => _ask(_controller.text, l10n),
                     icon: const Icon(Icons.send),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

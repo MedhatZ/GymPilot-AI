@@ -67,17 +67,122 @@ class SyncOperations extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+/// Local athlete profile — source of truth in Personal Mode.
+class AthleteProfiles extends Table {
+  TextColumn get id => text()();
+  TextColumn get displayName => text()();
+  IntColumn get age => integer()();
+  IntColumn get sex => integer().withDefault(const Constant(0))();
+  RealColumn get heightCm => real()();
+  RealColumn get bodyWeightKg => real()();
+  IntColumn get experience => integer().withDefault(const Constant(1))();
+  RealColumn get yearsTraining => real().withDefault(const Constant(1))();
+  IntColumn get primaryGoal => integer().withDefault(const Constant(0))();
+  IntColumn get secondaryGoal => integer().nullable()();
+  IntColumn get trainingDaysPerWeek => integer().withDefault(const Constant(4))();
+  IntColumn get preferredSessionMinutes => integer().withDefault(const Constant(60))();
+  IntColumn get equipmentSetting => integer().withDefault(const Constant(0))();
+  TextColumn get injuryNotes => text().nullable()();
+  RealColumn get baselineBenchKg => real().nullable()();
+  BoolColumn get onboardingCompleted => boolean().withDefault(const Constant(false))();
+  TextColumn get lastCompletedProgramDayId => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class Programs extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get status => text().withDefault(const Constant('Active'))();
+  DateTimeColumn get startDateUtc => dateTime()();
+  DateTimeColumn get endDateUtc => dateTime().nullable()();
+  IntColumn get currentVersionNumber => integer().withDefault(const Constant(1))();
+  TextColumn get reason => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class ProgramDays extends Table {
+  TextColumn get id => text()();
+  TextColumn get programId => text().references(Programs, #id, onDelete: KeyAction.cascade)();
+  IntColumn get dayIndex => integer()();
+  TextColumn get name => text()();
+  TextColumn get split => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class ProgramExercises extends Table {
+  TextColumn get id => text()();
+  TextColumn get programDayId =>
+      text().references(ProgramDays, #id, onDelete: KeyAction.cascade)();
+  TextColumn get catalogExerciseId => text()();
+  TextColumn get exerciseName => text()();
+  IntColumn get position => integer()();
+  IntColumn get sets => integer()();
+  IntColumn get minReps => integer()();
+  IntColumn get maxReps => integer()();
+  RealColumn get startingLoadKg => real().nullable()();
+  IntColumn get restSeconds => integer().withDefault(const Constant(90))();
+  RealColumn get targetRir => real().nullable()();
+  BoolColumn get isCompound => boolean().withDefault(const Constant(true))();
+  RealColumn get loadIncrementKg => real().withDefault(const Constant(2.5))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class LocalPersonalRecords extends Table {
+  TextColumn get id => text()();
+  TextColumn get exerciseName => text()();
+  TextColumn get catalogExerciseId => text().nullable()();
+  TextColumn get recordType => text()();
+  RealColumn get value => real()();
+  DateTimeColumn get achievedAtUtc => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 @DriftDatabase(
-  tables: [WorkoutSessions, WorkoutExercises, WorkoutSets, SyncOperations],
+  tables: [
+    WorkoutSessions,
+    WorkoutExercises,
+    WorkoutSets,
+    SyncOperations,
+    AthleteProfiles,
+    Programs,
+    ProgramDays,
+    ProgramExercises,
+    LocalPersonalRecords,
+  ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
   AppDatabase.forTesting(super.executor);
 
-  static QueryExecutor _openConnection() => driftDatabase(name: 'gymcoach_v2');
+  static QueryExecutor _openConnection() => driftDatabase(name: 'gymcoach_v3');
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) async => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          if (from < 3) {
+            await m.createTable(athleteProfiles);
+            await m.createTable(programs);
+            await m.createTable(programDays);
+            await m.createTable(programExercises);
+            await m.createTable(localPersonalRecords);
+          }
+        },
+      );
 
   Future<void> createSession(WorkoutSessionsCompanion session) =>
       into(workoutSessions).insert(session, mode: InsertMode.insertOrReplace);
@@ -140,6 +245,37 @@ class AppDatabase extends _$AppDatabase {
     return (select(workoutSets)
           ..where((set) => set.exerciseId.equals(exerciseId))
           ..orderBy([(set) => OrderingTerm.asc(set.setNumber)]))
+        .get();
+  }
+
+  Future<AthleteProfile?> getProfile() => select(athleteProfiles).getSingleOrNull();
+
+  Future<void> upsertProfile(AthleteProfilesCompanion profile) =>
+      into(athleteProfiles).insert(profile, mode: InsertMode.insertOrReplace);
+
+  Future<Program?> getActiveProgram() {
+    return (select(programs)..where((p) => p.status.equals('Active'))).getSingleOrNull();
+  }
+
+  Future<List<ProgramDay>> daysForProgram(String programId) {
+    return (select(programDays)
+          ..where((d) => d.programId.equals(programId))
+          ..orderBy([(d) => OrderingTerm.asc(d.dayIndex)]))
+        .get();
+  }
+
+  Future<List<ProgramExercise>> exercisesForProgramDay(String dayId) {
+    return (select(programExercises)
+          ..where((e) => e.programDayId.equals(dayId))
+          ..orderBy([(e) => OrderingTerm.asc(e.position)]))
+        .get();
+  }
+
+  Future<List<WorkoutSession>> completedSessions({int limit = 50}) {
+    return (select(workoutSessions)
+          ..where((s) => s.completedAt.isNotNull())
+          ..orderBy([(s) => OrderingTerm.desc(s.completedAt)])
+          ..limit(limit))
         .get();
   }
 }

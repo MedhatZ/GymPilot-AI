@@ -4,9 +4,12 @@ import 'package:drift/drift.dart' hide Column;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/config/personal_mode_service.dart';
 import '../../core/network/api_client.dart';
 import '../../data/local/app_database.dart';
 import '../../data/local/database_provider.dart';
+import '../../data/repositories/repository_contracts.dart';
+import '../../data/repositories/repository_providers.dart';
 import '../../data/sync/sync_service.dart';
 import 'rest_timer_controller.dart';
 
@@ -45,8 +48,14 @@ class ActiveWorkoutState {
 }
 
 class ActiveWorkoutController extends StateNotifier<ActiveWorkoutState> {
-  ActiveWorkoutController(this._db, this._api, this._sync, this._timer)
-      : super(const ActiveWorkoutState()) {
+  ActiveWorkoutController(
+    this._db,
+    this._api,
+    this._sync,
+    this._timer,
+    this._workouts,
+    this._personal,
+  ) : super(const ActiveWorkoutState()) {
     restore();
   }
 
@@ -54,6 +63,8 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkoutState> {
   final ApiClient _api;
   final SyncService _sync;
   final RestTimerController _timer;
+  final WorkoutSessionRepository _workouts;
+  final PersonalModeService _personal;
   final _uuid = const Uuid();
 
   Future<void> restore() async {
@@ -70,69 +81,70 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkoutState> {
   Future<void> startFromRecommended({Map<String, dynamic>? readiness}) async {
     state = state.copyWith(loading: true, error: null);
     try {
-      Map<String, dynamic>? day;
-      Map<String, dynamic>? program;
-      try {
-        final home = await _api.dio.get('/api/home');
-        day = home.data['todaysWorkout'] as Map<String, dynamic>?;
-        program = home.data['activeProgram'] as Map<String, dynamic>?;
-      } catch (_) {}
+      final next = await _workouts.getNextWorkout();
+      final dayName = next?['dayName']?.toString() ?? 'Workout';
+      final programDayId = next?['programDayId']?.toString();
+      final programName = next?['programName']?.toString();
+      final exerciseMaps = (next?['exercises'] as List?) ?? [];
 
       final sessionId = _uuid.v4();
-      final dayName = day?['name']?.toString() ?? 'Workout';
-      final programDayId = day?['id']?.toString();
-
       await _db.createSession(WorkoutSessionsCompanion.insert(
         id: sessionId,
         name: dayName,
         programDayId: Value(programDayId),
-        programName: Value(program?['name']?.toString()),
+        programName: Value(programName),
         startedAt: DateTime.now().toUtc(),
         readinessJson: Value(readiness == null ? null : jsonEncode(readiness)),
       ));
 
-      try {
-        await _api.dio.post('/api/workouts/start', data: {
-          'programDayId': programDayId,
-          'clientId': sessionId,
-          'startedAtUtc': DateTime.now().toUtc().toIso8601String(),
-        });
-      } catch (_) {}
+      if (!_personal.isEnabled) {
+        try {
+          await _api.dio.post('/api/workouts/start', data: {
+            'programDayId': programDayId,
+            'clientId': sessionId,
+            'startedAtUtc': DateTime.now().toUtc().toIso8601String(),
+          });
+        } catch (_) {}
+      }
 
-      final exerciseMaps = (day?['exercises'] as List?) ?? [];
       for (var i = 0; i < exerciseMaps.length; i++) {
         final e = Map<String, dynamic>.from(exerciseMaps[i] as Map);
         final localId = _uuid.v4();
-        var suggested = (e['startingLoadKg'] as num?)?.toDouble();
-        String? previousJson;
-        try {
-          final sug = await _api.dio.get('/api/workouts/suggest/${e['exerciseId']}');
-          suggested = (sug.data['suggestedLoadKg'] as num?)?.toDouble() ?? suggested;
-          previousJson = jsonEncode({
-            'reason': sug.data['reason'],
-            'suggestedReps': sug.data['suggestedReps'],
-            'decision': sug.data['decision'],
-          });
-        } catch (_) {}
+        final catalogId = e['exerciseId']?.toString() ?? '';
+        final name = e['exerciseName']?.toString() ?? 'Exercise';
+        final sets = (e['sets'] as num?)?.toInt() ?? 3;
+        final minReps = (e['minReps'] as num?)?.toInt() ?? 6;
+        final maxReps = (e['maxReps'] as num?)?.toInt() ?? 8;
+        final increment = (e['loadIncrementKg'] as num?)?.toDouble() ?? 2.5;
+        final starting = (e['startingLoadKg'] as num?)?.toDouble();
+
+        final suggestion = await _workouts.suggestLoad(
+          catalogExerciseId: catalogId,
+          exerciseName: name,
+          targetSets: sets,
+          minReps: minReps,
+          maxReps: maxReps,
+          loadIncrementKg: increment,
+          startingLoadKg: starting,
+        );
 
         await _db.createExercise(WorkoutExercisesCompanion.insert(
           id: localId,
           sessionId: sessionId,
-          serverExerciseId: Value(e['exerciseId']?.toString()),
-          exerciseName: e['exerciseName']?.toString() ?? 'Exercise',
+          serverExerciseId: Value(catalogId),
+          exerciseName: name,
           position: i,
-          targetSets: Value((e['sets'] as num?)?.toInt() ?? 3),
-          minReps: Value((e['minReps'] as num?)?.toInt() ?? 6),
-          maxReps: Value((e['maxReps'] as num?)?.toInt() ?? 8),
-          suggestedWeight: Value(suggested),
+          targetSets: Value(sets),
+          minReps: Value(minReps),
+          maxReps: Value(maxReps),
+          suggestedWeight: Value((suggestion?['suggestedLoadKg'] as num?)?.toDouble() ?? starting),
           restSeconds: Value((e['restSeconds'] as num?)?.toInt() ?? 90),
-          loadIncrement: const Value(2.5),
-          previousPerformanceJson: Value(previousJson),
+          loadIncrement: Value(increment),
+          previousPerformanceJson: Value(suggestion == null ? null : jsonEncode(suggestion)),
         ));
       }
 
       if (exerciseMaps.isEmpty) {
-        // Offline fallback: one placeholder exercise
         await _db.createExercise(WorkoutExercisesCompanion.insert(
           id: _uuid.v4(),
           sessionId: sessionId,
@@ -145,7 +157,10 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkoutState> {
       final exercises = await _db.exercisesForSession(sessionId);
       state = ActiveWorkoutState(session: session, exercises: exercises, loading: false);
     } catch (e) {
-      state = state.copyWith(loading: false, error: e.toString());
+      state = state.copyWith(
+        loading: false,
+        error: 'Could not start workout from your local program. Finish Quick setup first.',
+      );
     }
   }
 
@@ -187,26 +202,27 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkoutState> {
       ),
     );
 
-    try {
-      await _api.dio.post('/api/workouts/${session.id}/sets', data: {
-        'workoutExerciseClientId': ex.id,
-        'setClientId': setId,
-        'exerciseId': ex.serverExerciseId,
-        'order': ex.position,
-        'setNumber': setNumber,
-        'weightKg': weight,
-        'reps': reps,
-        'rir': rir,
-        'setType': warmup ? 0 : 1,
-        'note': null,
-        'completedAtUtc': DateTime.now().toUtc().toIso8601String(),
-      });
-    } catch (_) {}
+    if (!_personal.isEnabled) {
+      try {
+        await _api.dio.post('/api/workouts/${session.id}/sets', data: {
+          'workoutExerciseClientId': ex.id,
+          'setClientId': setId,
+          'exerciseId': ex.serverExerciseId,
+          'order': ex.position,
+          'setNumber': setNumber,
+          'weightKg': weight,
+          'reps': reps,
+          'rir': rir,
+          'setType': warmup ? 0 : 1,
+          'note': null,
+          'completedAtUtc': DateTime.now().toUtc().toIso8601String(),
+        });
+      } catch (_) {}
+    }
 
     if (!warmup) {
       _timer.start(ex.restSeconds);
     }
-    // refresh exercise list reference
     state = state.copyWith(exercises: await _db.exercisesForSession(session.id));
   }
 
@@ -239,20 +255,25 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkoutState> {
     final session = state.session;
     if (session == null) return null;
     await _db.completeSession(sessionId: session.id, difficulty: difficulty, painReported: pain);
-    try {
-      await _api.dio.post('/api/workouts/complete', data: {
-        'sessionClientId': session.id,
-        'difficulty': difficulty,
-        'painReported': pain,
-        'painLocation': null,
-        'painExerciseId': null,
-        'notes': null,
-        'completedAtUtc': DateTime.now().toUtc().toIso8601String(),
-      });
-    } catch (_) {}
-    try {
-      await _sync.flush();
-    } catch (_) {}
+    if (session.programDayId != null) {
+      await _workouts.markDayCompleted(session.programDayId!);
+    }
+    if (!_personal.isEnabled) {
+      try {
+        await _api.dio.post('/api/workouts/complete', data: {
+          'sessionClientId': session.id,
+          'difficulty': difficulty,
+          'painReported': pain,
+          'painLocation': null,
+          'painExerciseId': null,
+          'notes': null,
+          'completedAtUtc': DateTime.now().toUtc().toIso8601String(),
+        });
+      } catch (_) {}
+      try {
+        await _sync.flush();
+      } catch (_) {}
+    }
     _timer.skip();
     final id = session.id;
     state = const ActiveWorkoutState(loading: false);
@@ -267,5 +288,7 @@ final activeWorkoutProvider =
     ref.watch(apiClientProvider),
     ref.watch(syncServiceProvider),
     ref.watch(restTimerProvider),
+    ref.watch(workoutSessionRepositoryProvider),
+    ref.watch(personalModeServiceProvider),
   );
 });

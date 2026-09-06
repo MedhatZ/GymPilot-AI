@@ -1,0 +1,316 @@
+{
+  "@@locale": "en",
+  "appTitle": "GymCoach AI",
+  "navHome": "Home",
+  "navWorkout": "Workout",
+  "navProgress": "Progress",
+  "navCoach": "Coach",
+  "navSettings": "Settings",
+  "language": "Language",
+  "languageEnglish": "English",
+  "languageArabic": "Arabic",
+  "next": "Next",
+  "back": "Back",
+  "skip": "Skip",
+  "done": "Done",
+  "save": "Save",
+  "cancel": "Cancel",
+  "refresh": "Refresh",
+  "generating": "Generating…",
+  "generateProgram": "Generate program",
+  "quickSetupTitle": "Quick setup · {step}",
+  "@quickSetupTitle": {
+    "placeholders": {
+      "step": {"type": "String"}
+    }
+  },
+  "stepProfile": "Profile",
+  "stepGoal": "Goal",
+  "stepSchedule": "Schedule",
+  "stepLimitations": "Limitations",
+  "stepStrength": "Strength (optional)",
+  "labelName": "Name",
+  "labelAge": "Age",
+  "labelYearsTraining": "Years training",
+  "labelHeightCm": "Height cm",
+  "labelWeightKg": "Weight kg",
+  "labelSex": "Sex",
+  "sexMale": "Male",
+  "sexFemale": "Female",
+  "sexOther": "Other",
+  "sexPreferNot": "Prefer not to say",
+  "labelExperience": "Experience",
+  "expBeginner": "Beginner",
+  "expIntermediate": "Intermediate",
+  "expAdvanced": "Advanced",
+  "labelPrimaryGoal": "Primary goal",
+  "labelSecondaryGoal": "Secondary goal (optional)",
+  "goalNone": "None",
+  "goalHypertrophy": "Hypertrophy",
+  "goalStrength": "Strength",
+  "goalStrengthHypertrophy": "Strength + Hypertrophy",
+  "goalBodyRecomp": "Body recomposition",
+  "goalGeneralFitness": "General fitness",
+  "labelEquipment": "Equipment",
+  "equipmentFullGym": "Full gym",
+  "equipmentHomeGym": "Home gym",
+  "equipmentCustom": "Custom",
+  "labelDaysPerWeek": "Training days / week",
+  "labelSessionMinutes": "Session minutes",
+  "labelInjuries": "Injuries / exercises to avoid",
+  "optionalHint": "Optional",
+  "strengthOptionalHelp": "Optional: enter a recent Bench Press working set (e.g. 80). Leave blank to skip.",
+  "labelBenchOptional": "Bench Press kg (optional)",
+  "setupFailedOffline": "Could not finish setup. In Personal Mode this should work offline — please try again.",
+  "setupFailedGeneric": "Setup failed. Please check your inputs and try again.",
+  "todaysWorkout": "TODAY'S WORKOUT",
+  "noWorkoutYet": "No workout yet",
+  "completeSetupForProgram": "Complete setup to generate a program.",
+  "startWorkout": "START WORKOUT",
+  "resumeWorkout": "RESUME WORKOUT",
+  "activeWorkout": "ACTIVE WORKOUT",
+  "resume": "RESUME",
+  "program": "Program",
+  "noActiveProgram": "No active program",
+  "noEndDate": "No end date — continues while you progress.",
+  "whyThisProgram": "Why this program?",
+  "programReasonDefault": "Generated from your profile, goals, schedule, and equipment. Changes are evidence-based, not calendar-based.",
+  "workout": "Workout",
+  "quickReadiness": "Quick readiness (optional)",
+  "energy": "Energy",
+  "soreness": "Soreness",
+  "motivation": "Motivation",
+  "levelLow": "Low",
+  "levelNormal": "Normal",
+  "levelModerate": "Moderate",
+  "levelHigh": "High",
+  "finish": "FINISH",
+  "finishWorkout": "Finish workout",
+  "howWasWorkout": "How was the workout?",
+  "difficultyVeryEasy": "Very Easy",
+  "difficultyGood": "Good",
+  "difficultyHard": "Hard",
+  "difficultyVeryHard": "Very Hard",
+  "anyPain": "Any pain?",
+  "yes": "Yes",
+  "no": "No",
+  "logSet": "Log set",
+  "sets": "Sets",
+  "warmup": "Warm-up",
+  "replaceExercise": "Replace exercise",
+  "painDiscomfort": "Pain / discomfort",
+  "suggested": "Suggested",
+  "target": "Target",
+  "workoutSummary": "Workout summary",
+  "duration": "Duration",
+  "workingSets": "Working sets",
+  "exercises": "Exercises",
+  "volume": "Volume",
+  "newPr": "NEW PR",
+  "progress": "Progress",
+  "overview": "Overview",
+  "history": "History",
+  "recentPrs": "Recent PRs",
+  "sessionsTracked": "Sessions tracked: {count} lifts",
+  "@sessionsTracked": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "readiness": "Readiness",
+  "continueRecommendation": "Recommendation: CONTINUE while progression remains positive. No calendar expiration.",
+  "progressEmpty": "Keep logging workouts to build on-device history.",
+  "historyHelp": "Completed workouts appear after you finish sessions. History is built from real logged work only.",
+  "sessionsCount": "{count} sessions",
+  "@sessionsCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "progressing": "↑ progressing",
+  "monitor": "→ monitor",
+  "coach": "Coach",
+  "coachIntro": "Ask about progress, loads, plateaus, or program decisions. Answers are grounded in your logged training data.",
+  "askCoachHint": "Ask the coach…",
+  "coachThinking": "Coach is thinking…",
+  "you": "You",
+  "sourceOpenAi": "Source: OpenAI",
+  "sourceTrainingEngine": "Source: Training Engine",
+  "coachFallback": "Training-engine fallback — keep logging working sets. Program changes require multi-session evidence, not calendar weeks.",
+  "coachUnavailable": "Coach unavailable — showing training-engine fallback.",
+  "presetProgressing": "Am I progressing?",
+  "presetWhyWeight": "Why is today's weight recommended?",
+  "presetDeload": "Do I need a deload?",
+  "presetChangeProgram": "Should I change my program?",
+  "presetImproved": "What improved recently?",
+  "settings": "Settings",
+  "personalMode": "Personal Mode",
+  "personalModeOn": "Enabled — standalone on-device (no backend required)",
+  "personalModeOff": "Disabled",
+  "units": "Units",
+  "defaultIncrement": "Default weight increment",
+  "dataSource": "Data source",
+  "localDrift": "Local Drift database",
+  "editProfile": "Edit profile",
+  "editProfileSubtitle": "Goals, schedule, limitations",
+  "huaweiHealth": "Huawei Health",
+  "huaweiConnected": "Connected / available",
+  "huaweiNotConnected": "Not connected (dev stub — credentials required)",
+  "aiCoach": "AI Coach",
+  "openaiStatus": "OpenAI status",
+  "statusConnected": "Connected",
+  "statusError": "Error",
+  "statusNotConfigured": "Not configured",
+  "trainingEngineOnly": "Training Engine Only",
+  "trainingEngineOnDevice": "Training Engine Only (on-device)",
+  "about": "About",
+  "aboutBody": "GymCoach AI Personal MVP. Nutrition is out of scope. Programs do not expire on a calendar.",
+  "signOut": "Sign out",
+  "profileSaved": "Profile saved",
+  "profileSaveFailed": "Could not save profile. Try again.",
+  "couldNotLoadHome": "Could not load home. Pull to refresh after setup.",
+  "couldNotLoadProgram": "Could not load program.",
+  "couldNotStartWorkout": "Could not start workout from your local program. Finish Quick setup first.",
+  "dayLabel": "Day {number}",
+  "@dayLabel": {
+    "placeholders": {
+      "number": {"type": "int"}
+    }
+  },
+  "lastWorkout": "Last: {name}",
+  "@lastWorkout": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "versionStatus": "Version {version} · {status}",
+  "@versionStatus": {
+    "placeholders": {
+      "version": {"type": "Object"},
+      "status": {"type": "Object"}
+    }
+  },
+  "startedAt": "Started {date}",
+  "@startedAt": {
+    "placeholders": {
+      "date": {"type": "Object"}
+    }
+  },
+  "weight": "Weight",
+  "reps": "Reps",
+  "rirOptional": "RIR (optional)",
+  "skipRir": "Skip RIR",
+  "warmupSet": "Warm-up set",
+  "replaceForSession": "Replace for this session",
+  "alternativeExercise": "Alternative exercise",
+  "replace": "Replace",
+  "painNoted": "Pain noted for this session (not medical advice). You can continue.",
+  "restTimer": "Rest {seconds}s",
+  "@restTimer": {
+    "placeholders": {
+      "seconds": {"type": "int"}
+    }
+  },
+  "pausedTimer": "Paused {seconds}s",
+  "@pausedTimer": {
+    "placeholders": {
+      "seconds": {"type": "int"}
+    }
+  },
+  "pause": "Pause",
+  "add30s": "+30s",
+  "reset": "Reset",
+  "noSetsYet": "No sets yet",
+  "workingSetHash": "Working · #{number}",
+  "@workingSetHash": {
+    "placeholders": {
+      "number": {"type": "int"}
+    }
+  },
+  "targetSetsReps": "Target {sets} × {minReps}-{maxReps}",
+  "@targetSetsReps": {
+    "placeholders": {
+      "sets": {"type": "int"},
+      "minReps": {"type": "int"},
+      "maxReps": {"type": "int"}
+    }
+  },
+  "suggestedWeight": "Suggested: {weight} kg",
+  "@suggestedWeight": {
+    "placeholders": {
+      "weight": {"type": "String"}
+    }
+  },
+  "substitutedFrom": "Substituted from {name}",
+  "@substitutedFrom": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "recentPr": "Recent PR: {value}",
+  "@recentPr": {
+    "placeholders": {
+      "value": {"type": "String"}
+    }
+  },
+  "readinessWithScore": "Readiness: {score} ({label})",
+  "@readinessWithScore": {
+    "placeholders": {
+      "score": {"type": "Object"},
+      "label": {"type": "Object"}
+    }
+  },
+  "exercisesCount": "{count} exercises",
+  "@exercisesCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "daySessionMeta": "{dayLabel} · {exercises} exercises · ~{minutes} min",
+  "@daySessionMeta": {
+    "placeholders": {
+      "dayLabel": {"type": "String"},
+      "exercises": {"type": "Object"},
+      "minutes": {"type": "Object"}
+    }
+  },
+  "labelDaysWeekShort": "Days / week",
+  "bestProgressLine": "Best {weight} kg · e1RM {e1rm} · {trend}",
+  "@bestProgressLine": {
+    "placeholders": {
+      "weight": {"type": "Object"},
+      "e1rm": {"type": "Object"},
+      "trend": {"type": "String"}
+    }
+  },
+  "durationValue": "Duration: {value}",
+  "@durationValue": {
+    "placeholders": {
+      "value": {"type": "Object"}
+    }
+  },
+  "workingSetsValue": "Working sets: {count}",
+  "@workingSetsValue": {
+    "placeholders": {
+      "count": {"type": "Object"}
+    }
+  },
+  "exercisesValue": "Exercises: {count}",
+  "@exercisesValue": {
+    "placeholders": {
+      "count": {"type": "Object"}
+    }
+  },
+  "volumeValue": "Volume: {value} kg",
+  "@volumeValue": {
+    "placeholders": {
+      "value": {"type": "Object"}
+    }
+  },
+  "whyReason": "Why: {reason}",
+  "@whyReason": {
+    "placeholders": {
+      "reason": {"type": "String"}
+    }
+  }
+}

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_state.dart';
-import '../../core/network/api_client.dart';
+import '../../data/repositories/gym_models.dart';
+import '../../data/repositories/repository_providers.dart';
 
+/// Legacy single-page onboarding — uses the same local/cloud repositories as Quick setup.
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -42,38 +44,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _finish() async {
     setState(() => _busy = true);
     try {
-      final api = ref.read(apiClientProvider);
-      await api.dio.post('/api/onboarding', data: {
-        'displayName': _name.text.trim(),
-        'age': int.parse(_age.text),
-        'sex': _sex,
-        'heightCm': double.parse(_height.text),
-        'bodyWeightKg': double.parse(_weight.text),
-        'experience': _experience,
-        'yearsTraining': double.parse(_years.text),
-        'primaryGoal': _goal,
-        'secondaryGoal': null,
-        'trainingDaysPerWeek': int.parse(_days.text),
-        'preferredSessionMinutes': int.parse(_duration.text),
-        'equipmentSetting': _equipment,
-        'equipmentIds': <String>[],
-        'limitations': _injury.text.trim().isEmpty
-            ? <Map<String, dynamic>>[]
-            : [
-                {
-                  'injuryDescription': _injury.text.trim(),
-                  'painArea': null,
-                  'avoidedExerciseId': null,
-                  'movementRestriction': null,
-                }
-              ],
-        'baselineLifts': <Map<String, dynamic>>[],
-      });
-      await api.dio.post('/api/programs/generate');
+      final input = OnboardingInput(
+        displayName: _name.text.trim(),
+        age: int.tryParse(_age.text) ?? 28,
+        sex: _sex,
+        heightCm: double.tryParse(_height.text) ?? 180,
+        bodyWeightKg: double.tryParse(_weight.text) ?? 80,
+        experience: _experience,
+        yearsTraining: double.tryParse(_years.text) ?? 2,
+        primaryGoal: _goal,
+        trainingDaysPerWeek: int.tryParse(_days.text) ?? 4,
+        preferredSessionMinutes: int.tryParse(_duration.text) ?? 60,
+        equipmentSetting: _equipment,
+        injuryNotes: _injury.text.trim().isEmpty ? null : _injury.text.trim(),
+      );
+      await ref.read(onboardingRepositoryProvider).completeSetup(input);
+      await ref.read(programRepositoryProvider).generateInitial(input);
       await ref.read(authControllerProvider.notifier).markOnboarded();
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Setup failed. Please try again.')),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -83,84 +75,92 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(title: const Text('Onboarding')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          TextField(controller: _name, decoration: const InputDecoration(labelText: 'Name')),
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: TextField(controller: _age, decoration: const InputDecoration(labelText: 'Age'), keyboardType: TextInputType.number)),
-            const SizedBox(width: 12),
-            Expanded(child: TextField(controller: _years, decoration: const InputDecoration(labelText: 'Years training'), keyboardType: TextInputType.number)),
-          ]),
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: TextField(controller: _height, decoration: const InputDecoration(labelText: 'Height (cm)'), keyboardType: TextInputType.number)),
-            const SizedBox(width: 12),
-            Expanded(child: TextField(controller: _weight, decoration: const InputDecoration(labelText: 'Weight (kg)'), keyboardType: TextInputType.number)),
-          ]),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            initialValue: _sex,
-            decoration: const InputDecoration(labelText: 'Sex'),
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('Male')),
-              DropdownMenuItem(value: 1, child: Text('Female')),
-              DropdownMenuItem(value: 2, child: Text('Other')),
-              DropdownMenuItem(value: 3, child: Text('Prefer not to say')),
-            ],
-            onChanged: (v) => setState(() => _sex = v ?? 0),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            initialValue: _experience,
-            decoration: const InputDecoration(labelText: 'Experience'),
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('Beginner')),
-              DropdownMenuItem(value: 1, child: Text('Intermediate')),
-              DropdownMenuItem(value: 2, child: Text('Advanced')),
-            ],
-            onChanged: (v) => setState(() => _experience = v ?? 1),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            initialValue: _goal,
-            decoration: const InputDecoration(labelText: 'Primary goal'),
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('Hypertrophy')),
-              DropdownMenuItem(value: 1, child: Text('Strength')),
-              DropdownMenuItem(value: 2, child: Text('Strength + Hypertrophy')),
-              DropdownMenuItem(value: 3, child: Text('Body recomposition')),
-              DropdownMenuItem(value: 4, child: Text('General fitness')),
-            ],
-            onChanged: (v) => setState(() => _goal = v ?? 0),
-          ),
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: TextField(controller: _days, decoration: const InputDecoration(labelText: 'Days / week'), keyboardType: TextInputType.number)),
-            const SizedBox(width: 12),
-            Expanded(child: TextField(controller: _duration, decoration: const InputDecoration(labelText: 'Session min'), keyboardType: TextInputType.number)),
-          ]),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            initialValue: _equipment,
-            decoration: const InputDecoration(labelText: 'Equipment'),
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('Full gym')),
-              DropdownMenuItem(value: 1, child: Text('Home gym')),
-              DropdownMenuItem(value: 2, child: Text('Custom')),
-            ],
-            onChanged: (v) => setState(() => _equipment = v ?? 0),
-          ),
-          const SizedBox(height: 12),
-          TextField(controller: _injury, decoration: const InputDecoration(labelText: 'Injuries / limitations (optional)')),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _busy ? null : _finish,
-            child: Text(_busy ? 'Generating program…' : 'Save & generate program'),
-          ),
-        ],
+      body: SafeArea(
+        child: ListView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.all(20),
+          children: [
+            TextField(controller: _name, decoration: const InputDecoration(labelText: 'Name')),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: TextField(controller: _age, decoration: const InputDecoration(labelText: 'Age'), keyboardType: TextInputType.number)),
+              const SizedBox(width: 12),
+              Expanded(child: TextField(controller: _years, decoration: const InputDecoration(labelText: 'Years training'), keyboardType: TextInputType.number)),
+            ]),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: TextField(controller: _height, decoration: const InputDecoration(labelText: 'Height (cm)'), keyboardType: TextInputType.number)),
+              const SizedBox(width: 12),
+              Expanded(child: TextField(controller: _weight, decoration: const InputDecoration(labelText: 'Weight (kg)'), keyboardType: TextInputType.number)),
+            ]),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: _sex,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Sex'),
+              items: const [
+                DropdownMenuItem(value: 0, child: Text('Male')),
+                DropdownMenuItem(value: 1, child: Text('Female')),
+                DropdownMenuItem(value: 2, child: Text('Other')),
+                DropdownMenuItem(value: 3, child: Text('Prefer not to say', overflow: TextOverflow.ellipsis)),
+              ],
+              onChanged: (v) => setState(() => _sex = v ?? 0),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: _experience,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Experience'),
+              items: const [
+                DropdownMenuItem(value: 0, child: Text('Beginner')),
+                DropdownMenuItem(value: 1, child: Text('Intermediate')),
+                DropdownMenuItem(value: 2, child: Text('Advanced')),
+              ],
+              onChanged: (v) => setState(() => _experience = v ?? 1),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: _goal,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Primary goal'),
+              items: const [
+                DropdownMenuItem(value: 0, child: Text('Hypertrophy')),
+                DropdownMenuItem(value: 1, child: Text('Strength')),
+                DropdownMenuItem(value: 2, child: Text('Strength + Hypertrophy', overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 3, child: Text('Body recomposition')),
+                DropdownMenuItem(value: 4, child: Text('General fitness')),
+              ],
+              onChanged: (v) => setState(() => _goal = v ?? 0),
+            ),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: TextField(controller: _days, decoration: const InputDecoration(labelText: 'Days / week'), keyboardType: TextInputType.number)),
+              const SizedBox(width: 12),
+              Expanded(child: TextField(controller: _duration, decoration: const InputDecoration(labelText: 'Session min'), keyboardType: TextInputType.number)),
+            ]),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: _equipment,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Equipment'),
+              items: const [
+                DropdownMenuItem(value: 0, child: Text('Full gym')),
+                DropdownMenuItem(value: 1, child: Text('Home gym')),
+                DropdownMenuItem(value: 2, child: Text('Custom')),
+              ],
+              onChanged: (v) => setState(() => _equipment = v ?? 0),
+            ),
+            const SizedBox(height: 12),
+            TextField(controller: _injury, decoration: const InputDecoration(labelText: 'Injuries / limitations (optional)')),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: _busy ? null : _finish,
+              child: Text(_busy ? 'Generating program…' : 'Save & generate program'),
+            ),
+          ],
+        ),
       ),
     );
   }

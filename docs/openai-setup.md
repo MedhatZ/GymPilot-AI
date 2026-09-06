@@ -24,6 +24,8 @@ OpenAI__MaxRetries=2
 
 Alternate `Ai__*` keys and AgentRouter-compatible `BaseUrl` are also bound. See `.env.example`.
 
+On Render.com, set the same `OpenAI__*` variables as secrets — see [`render-deployment.md`](render-deployment.md).
+
 Default model for personal use: **`gpt-4o-mini`** (change via config, not code).
 
 ## PowerShell (local)

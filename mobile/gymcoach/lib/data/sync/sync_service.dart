@@ -6,15 +6,17 @@ import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/config/personal_mode_service.dart';
 import '../../core/network/api_client.dart';
 import '../local/app_database.dart';
 import '../local/database_provider.dart';
 
 class SyncService {
-  SyncService(this._db, this._api);
+  SyncService(this._db, this._api, this._personal);
 
   final AppDatabase _db;
   final ApiClient _api;
+  final PersonalModeService _personal;
   final _uuid = const Uuid();
 
   Future<void> enqueueSetSync({
@@ -47,7 +49,10 @@ class SyncService {
         ));
   }
 
+  /// Personal Mode: no network flush — Drift is the source of truth.
   Future<int> flush() async {
+    if (_personal.isEnabled) return 0;
+
     final connectivity = await Connectivity().checkConnectivity();
     if (connectivity.contains(ConnectivityResult.none)) return 0;
 
@@ -55,9 +60,6 @@ class SyncService {
     var flushed = 0;
     for (final op in pending) {
       try {
-        // Batch sync uses server workout sync when full session payloads are available.
-        // Individual set ops are retained until a session-level sync is implemented;
-        // mark attempt and keep for offline durability.
         await (_db.update(_db.syncOperations)..where((t) => t.id.equals(op.id))).write(
           SyncOperationsCompanion(attempts: Value(op.attempts + 1)),
         );
@@ -69,7 +71,6 @@ class SyncService {
       }
     }
 
-    // Prefer pushing completed local sessions via idempotent API when online.
     final sessions = await _db.select(_db.workoutSessions).get();
     for (final session in sessions) {
       final exercises = await (_db.select(_db.workoutExercises)
@@ -117,14 +118,16 @@ class SyncService {
           },
           options: Options(headers: {'Idempotency-Key': session.id}),
         );
-      } catch (_) {
-        // Offline or auth failure — keep local data.
-      }
+      } catch (_) {}
     }
     return flushed;
   }
 }
 
 final syncServiceProvider = Provider<SyncService>((ref) {
-  return SyncService(ref.watch(appDatabaseProvider), ref.watch(apiClientProvider));
+  return SyncService(
+    ref.watch(appDatabaseProvider),
+    ref.watch(apiClientProvider),
+    ref.watch(personalModeServiceProvider),
+  );
 });

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gymcoach/l10n/app_localizations.dart';
 
 import '../../core/auth/auth_state.dart';
-import '../../core/network/api_client.dart';
+import '../../data/repositories/gym_models.dart';
+import '../../data/repositories/repository_providers.dart';
 
 /// Compact Personal Mode first-run setup (5 short steps).
 class SetupFlowScreen extends ConsumerStatefulWidget {
@@ -39,44 +41,41 @@ class _SetupFlowScreenState extends ConsumerState<SetupFlowScreen> {
   }
 
   Future<void> _finish({bool skipBaseline = false}) async {
+    final l10n = AppLocalizations.of(context);
     setState(() => _busy = true);
     try {
-      final api = ref.read(apiClientProvider);
-      final baselines = <Map<String, dynamic>>[];
-      if (!skipBaseline && _bench.text.trim().isNotEmpty) {
-        // Best-effort: attach when exercise catalog available later
-      }
-      await api.dio.post('/api/onboarding', data: {
-        'displayName': _name.text.trim(),
-        'age': int.tryParse(_age.text) ?? 30,
-        'sex': _sex,
-        'heightCm': double.tryParse(_height.text) ?? 178,
-        'bodyWeightKg': double.tryParse(_weight.text) ?? 80,
-        'experience': _experience,
-        'yearsTraining': double.tryParse(_years.text) ?? 1,
-        'primaryGoal': _goal,
-        'secondaryGoal': _secondaryGoal < 0 ? null : _secondaryGoal,
-        'trainingDaysPerWeek': int.tryParse(_days.text) ?? 4,
-        'preferredSessionMinutes': int.tryParse(_duration.text) ?? 60,
-        'equipmentSetting': _equipment,
-        'equipmentIds': <String>[],
-        'limitations': _injury.text.trim().isEmpty
-            ? <Map<String, dynamic>>[]
-            : [
-                {
-                  'injuryDescription': _injury.text.trim(),
-                  'painArea': null,
-                  'avoidedExerciseId': null,
-                  'movementRestriction': null,
-                }
-              ],
-        'baselineLifts': baselines,
-      });
-      await api.dio.post('/api/programs/generate');
+      final input = OnboardingInput(
+        displayName: _name.text.trim().isEmpty ? 'Athlete' : _name.text.trim(),
+        age: int.tryParse(_age.text) ?? 30,
+        sex: _sex,
+        heightCm: double.tryParse(_height.text) ?? 178,
+        bodyWeightKg: double.tryParse(_weight.text) ?? 80,
+        experience: _experience,
+        yearsTraining: double.tryParse(_years.text) ?? 1,
+        primaryGoal: _goal,
+        secondaryGoal: _secondaryGoal < 0 ? null : _secondaryGoal,
+        trainingDaysPerWeek: int.tryParse(_days.text) ?? 4,
+        preferredSessionMinutes: int.tryParse(_duration.text) ?? 60,
+        equipmentSetting: _equipment,
+        injuryNotes: _injury.text.trim().isEmpty ? null : _injury.text.trim(),
+        baselineBenchKg: skipBaseline || _bench.text.trim().isEmpty
+            ? null
+            : double.tryParse(_bench.text),
+      );
+
+      final onboarding = ref.read(onboardingRepositoryProvider);
+      final programs = ref.read(programRepositoryProvider);
+      await onboarding.completeSetup(input);
+      await programs.generateInitial(input);
       await ref.read(authControllerProvider.notifier).markOnboarded();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        final msg = e.toString().contains('SocketException') ||
+                e.toString().contains('DioException') ||
+                e.toString().contains('connection')
+            ? l10n.setupFailedOffline
+            : l10n.setupFailedGeneric;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -85,145 +84,270 @@ class _SetupFlowScreenState extends ConsumerState<SetupFlowScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final titles = ['Profile', 'Goal', 'Schedule', 'Limitations', 'Strength (optional)'];
+    final l10n = AppLocalizations.of(context);
+    final titles = [
+      l10n.stepProfile,
+      l10n.stepGoal,
+      l10n.stepSchedule,
+      l10n.stepLimitations,
+      l10n.stepStrength,
+    ];
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+
     return Scaffold(
-      appBar: AppBar(title: Text('Quick setup · ${titles[_step]}')),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            LinearProgressIndicator(value: (_step + 1) / 5),
-            const SizedBox(height: 20),
-            Expanded(child: _buildStep()),
-            Row(
-              children: [
-                if (_step > 0)
-                  TextButton(onPressed: () => setState(() => _step--), child: const Text('Back')),
-                const Spacer(),
-                if (_step < 4)
-                  FilledButton(
-                    onPressed: () => setState(() => _step++),
-                    child: const Text('Next'),
-                  )
-                else ...[
-                  TextButton(onPressed: _busy ? null : () => _finish(skipBaseline: true), child: const Text('Skip')),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _busy ? null : () => _finish(),
-                    child: Text(_busy ? 'Generating…' : 'Generate program'),
-                  ),
-                ],
-              ],
+      resizeToAvoidBottomInset: true,
+      appBar: AppBar(
+        title: Text(
+          l10n.quickSetupTitle(titles[_step]),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: LinearProgressIndicator(value: (_step + 1) / 5),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: _buildStep(l10n),
             ),
-          ],
+          ),
+        ],
+      ),
+      bottomNavigationBar: Material(
+        elevation: 6,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + bottomInset),
+          child: _buildBottomNav(l10n),
         ),
       ),
     );
   }
 
-  Widget _buildStep() {
+  Widget _buildBottomNav(AppLocalizations l10n) {
+    if (_step < 4) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_step > 0)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton(
+                onPressed: () => setState(() => _step--),
+                child: Text(l10n.back),
+              ),
+            ),
+          FilledButton(
+            onPressed: () => setState(() => _step++),
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+            child: Text(l10n.next),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton(
+            onPressed: () => setState(() => _step--),
+            child: Text(l10n.back),
+          ),
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _busy ? null : () => _finish(skipBaseline: true),
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                child: Text(l10n.skip),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: FilledButton(
+                onPressed: _busy ? null : () => _finish(),
+                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                child: Text(_busy ? l10n.generating : l10n.generateProgram),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStep(AppLocalizations l10n) {
     switch (_step) {
       case 0:
-        return ListView(children: [
-          TextField(controller: _name, decoration: const InputDecoration(labelText: 'Name')),
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: TextField(controller: _age, decoration: const InputDecoration(labelText: 'Age'), keyboardType: TextInputType.number)),
-            const SizedBox(width: 12),
-            Expanded(child: TextField(controller: _years, decoration: const InputDecoration(labelText: 'Years training'), keyboardType: TextInputType.number)),
-          ]),
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: TextField(controller: _height, decoration: const InputDecoration(labelText: 'Height cm'), keyboardType: TextInputType.number)),
-            const SizedBox(width: 12),
-            Expanded(child: TextField(controller: _weight, decoration: const InputDecoration(labelText: 'Weight kg'), keyboardType: TextInputType.number)),
-          ]),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            initialValue: _sex,
-            decoration: const InputDecoration(labelText: 'Sex'),
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('Male')),
-              DropdownMenuItem(value: 1, child: Text('Female')),
-              DropdownMenuItem(value: 2, child: Text('Other')),
-              DropdownMenuItem(value: 3, child: Text('Prefer not to say')),
-            ],
-            onChanged: (v) => setState(() => _sex = v ?? 0),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            initialValue: _experience,
-            decoration: const InputDecoration(labelText: 'Experience'),
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('Beginner')),
-              DropdownMenuItem(value: 1, child: Text('Intermediate')),
-              DropdownMenuItem(value: 2, child: Text('Advanced')),
-            ],
-            onChanged: (v) => setState(() => _experience = v ?? 1),
-          ),
-        ]);
-      case 1:
-        return ListView(children: [
-          DropdownButtonFormField<int>(
-            initialValue: _goal,
-            decoration: const InputDecoration(labelText: 'Primary goal'),
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('Hypertrophy')),
-              DropdownMenuItem(value: 1, child: Text('Strength')),
-              DropdownMenuItem(value: 2, child: Text('Strength + Hypertrophy')),
-              DropdownMenuItem(value: 3, child: Text('Body recomposition')),
-              DropdownMenuItem(value: 4, child: Text('General fitness')),
-            ],
-            onChanged: (v) => setState(() => _goal = v ?? 0),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            initialValue: _secondaryGoal,
-            decoration: const InputDecoration(labelText: 'Secondary goal (optional)'),
-            items: const [
-              DropdownMenuItem(value: -1, child: Text('None')),
-              DropdownMenuItem(value: 0, child: Text('Hypertrophy')),
-              DropdownMenuItem(value: 1, child: Text('Strength')),
-              DropdownMenuItem(value: 2, child: Text('Strength + Hypertrophy')),
-              DropdownMenuItem(value: 4, child: Text('General fitness')),
-            ],
-            onChanged: (v) => setState(() => _secondaryGoal = v ?? -1),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            initialValue: _equipment,
-            decoration: const InputDecoration(labelText: 'Equipment'),
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('Full gym')),
-              DropdownMenuItem(value: 1, child: Text('Home gym')),
-              DropdownMenuItem(value: 2, child: Text('Custom')),
-            ],
-            onChanged: (v) => setState(() => _equipment = v ?? 0),
-          ),
-        ]);
-      case 2:
-        return ListView(children: [
-          TextField(controller: _days, decoration: const InputDecoration(labelText: 'Training days / week'), keyboardType: TextInputType.number),
-          const SizedBox(height: 12),
-          TextField(controller: _duration, decoration: const InputDecoration(labelText: 'Session minutes'), keyboardType: TextInputType.number),
-        ]);
-      case 3:
-        return ListView(children: [
-          TextField(
-            controller: _injury,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Injuries / exercises to avoid',
-              hintText: 'Optional',
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(controller: _name, decoration: InputDecoration(labelText: l10n.labelName)),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: _age,
+                  decoration: InputDecoration(labelText: l10n.labelAge),
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _years,
+                  decoration: InputDecoration(labelText: l10n.labelYearsTraining),
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: _height,
+                  decoration: InputDecoration(labelText: l10n.labelHeightCm),
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _weight,
+                  decoration: InputDecoration(labelText: l10n.labelWeightKg),
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: _sex,
+              isExpanded: true,
+              decoration: InputDecoration(labelText: l10n.labelSex),
+              items: [
+                DropdownMenuItem(value: 0, child: Text(l10n.sexMale)),
+                DropdownMenuItem(value: 1, child: Text(l10n.sexFemale)),
+                DropdownMenuItem(value: 2, child: Text(l10n.sexOther)),
+                DropdownMenuItem(value: 3, child: Text(l10n.sexPreferNot, overflow: TextOverflow.ellipsis)),
+              ],
+              onChanged: (v) => setState(() => _sex = v ?? 0),
             ),
-          ),
-        ]);
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: _experience,
+              isExpanded: true,
+              decoration: InputDecoration(labelText: l10n.labelExperience),
+              items: [
+                DropdownMenuItem(value: 0, child: Text(l10n.expBeginner)),
+                DropdownMenuItem(value: 1, child: Text(l10n.expIntermediate)),
+                DropdownMenuItem(value: 2, child: Text(l10n.expAdvanced)),
+              ],
+              onChanged: (v) => setState(() => _experience = v ?? 1),
+            ),
+          ],
+        );
+      case 1:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            DropdownButtonFormField<int>(
+              initialValue: _goal,
+              isExpanded: true,
+              decoration: InputDecoration(labelText: l10n.labelPrimaryGoal),
+              items: [
+                DropdownMenuItem(value: 0, child: Text(l10n.goalHypertrophy)),
+                DropdownMenuItem(value: 1, child: Text(l10n.goalStrength)),
+                DropdownMenuItem(value: 2, child: Text(l10n.goalStrengthHypertrophy, overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 3, child: Text(l10n.goalBodyRecomp)),
+                DropdownMenuItem(value: 4, child: Text(l10n.goalGeneralFitness)),
+              ],
+              onChanged: (v) => setState(() => _goal = v ?? 0),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: _secondaryGoal,
+              isExpanded: true,
+              decoration: InputDecoration(labelText: l10n.labelSecondaryGoal),
+              items: [
+                DropdownMenuItem(value: -1, child: Text(l10n.goalNone)),
+                DropdownMenuItem(value: 0, child: Text(l10n.goalHypertrophy)),
+                DropdownMenuItem(value: 1, child: Text(l10n.goalStrength)),
+                DropdownMenuItem(value: 2, child: Text(l10n.goalStrengthHypertrophy, overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 4, child: Text(l10n.goalGeneralFitness)),
+              ],
+              onChanged: (v) => setState(() => _secondaryGoal = v ?? -1),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: _equipment,
+              isExpanded: true,
+              decoration: InputDecoration(labelText: l10n.labelEquipment),
+              items: [
+                DropdownMenuItem(value: 0, child: Text(l10n.equipmentFullGym)),
+                DropdownMenuItem(value: 1, child: Text(l10n.equipmentHomeGym)),
+                DropdownMenuItem(value: 2, child: Text(l10n.equipmentCustom)),
+              ],
+              onChanged: (v) => setState(() => _equipment = v ?? 0),
+            ),
+          ],
+        );
+      case 2:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _days,
+              decoration: InputDecoration(labelText: l10n.labelDaysPerWeek),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _duration,
+              decoration: InputDecoration(labelText: l10n.labelSessionMinutes),
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        );
+      case 3:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _injury,
+              maxLines: 3,
+              decoration: InputDecoration(
+                labelText: l10n.labelInjuries,
+                hintText: l10n.optionalHint,
+              ),
+            ),
+          ],
+        );
       default:
-        return ListView(children: [
-          const Text('Optional: enter a recent Bench Press working set (e.g. 80). Leave blank to skip.'),
-          const SizedBox(height: 12),
-          TextField(controller: _bench, decoration: const InputDecoration(labelText: 'Bench Press kg (optional)'), keyboardType: TextInputType.number),
-        ]);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(l10n.strengthOptionalHelp),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _bench,
+              decoration: InputDecoration(labelText: l10n.labelBenchOptional),
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        );
     }
   }
 }

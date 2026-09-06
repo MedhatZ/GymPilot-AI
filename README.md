@@ -35,13 +35,28 @@ To use PostgreSQL:
 
 Swagger: `/swagger` in Development. Health: `/health`.
 
+### Deploy to Render.com
+
+Docker image + env vars: see [`docs/render-deployment.md`](docs/render-deployment.md).
+
+Build context is `backend/`:
+
+```bash
+cd backend
+docker build -t gymcoach-api .
+```
+
 ### Auth
 
-JWT access + refresh tokens. Configure `Jwt:SigningKey` via environment in production — never commit real secrets.
+JWT access + refresh tokens. Configure `Jwt__SigningKey` via environment in production — never commit real secrets. Production refuses the `DEV_ONLY_*` placeholder.
 
 ### AI
 
-`Ai:Enabled=false` by default. Fake AI client is used for tests and local coaching stubs. Set `Ai:ApiKey` only via env/user-secrets when enabling live models.
+`OpenAI:Enabled=false` / `Ai:Enabled=false` by default. Fake / training-engine fallback is used when live OpenAI is not configured. Set only via environment on Render:
+
+`OpenAI__Enabled`, `OpenAI__ApiKey`, `OpenAI__Model`, `OpenAI__BaseUrl`
+
+(also accepts flat `OPENAI_API_KEY` / `OPENAI_MODEL`).
 
 ### Huawei Health
 
