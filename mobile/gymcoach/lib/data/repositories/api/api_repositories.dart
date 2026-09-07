@@ -137,7 +137,26 @@ class ApiWorkoutSessionRepository implements WorkoutSessionRepository {
   Future<Map<String, dynamic>?> getNextWorkout() async {
     try {
       final res = await _api.dio.get('/api/workouts/next');
-      return Map<String, dynamic>.from(res.data as Map);
+      final data = Map<String, dynamic>.from(res.data as Map);
+      final exercises = (data['exercises'] as List?) ?? [];
+      if (exercises.isNotEmpty) return data;
+
+      // Backward compatible if older deploy omitted exercises.
+      final programDayId = data['programDayId']?.toString();
+      if (programDayId == null) return data;
+      final programRes = await _api.dio.get('/api/programs/active');
+      final program = Map<String, dynamic>.from(programRes.data as Map);
+      final days = (program['days'] as List?) ?? [];
+      for (final d in days) {
+        final day = Map<String, dynamic>.from(d as Map);
+        if (day['id']?.toString() == programDayId) {
+          data['exercises'] = day['exercises'] ?? [];
+          data['dayName'] ??= day['name'];
+          data['programName'] ??= program['name'];
+          return data;
+        }
+      }
+      return data;
     } catch (_) {
       return _local.getNextWorkout();
     }

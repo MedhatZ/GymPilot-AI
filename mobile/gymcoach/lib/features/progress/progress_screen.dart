@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gymcoach/l10n/app_localizations.dart';
 
 import '../../data/repositories/repository_providers.dart';
+import '../workout/exercise_thumbnail.dart';
 
 final progressProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   try {
@@ -61,6 +62,11 @@ class ProgressScreen extends ConsumerWidget {
                       final m = Map<String, dynamic>.from(p as Map);
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
+                        leading: ExerciseThumbnail(
+                          catalogExerciseId: m['exerciseId']?.toString() ?? m['catalogExerciseId']?.toString(),
+                          exerciseName: m['exerciseName']?.toString(),
+                          size: 40,
+                        ),
                         title: Text('${m['exerciseName']} — ${m['type']}'),
                         subtitle: Text('${m['value']}'),
                       );
@@ -81,6 +87,11 @@ class ProgressScreen extends ConsumerWidget {
                             : '—';
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
+                      leading: ExerciseThumbnail(
+                        catalogExerciseId: m['exerciseId']?.toString() ?? m['id']?.toString(),
+                        exerciseName: m['name']?.toString(),
+                        size: 44,
+                      ),
                       title: Text(m['name']?.toString() ?? ''),
                       subtitle: Text(l10n.bestProgressLine(
                         m['bestWeight'] ?? '-',
@@ -99,6 +110,11 @@ class ProgressScreen extends ConsumerWidget {
                       final m = Map<String, dynamic>.from(e as Map);
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
+                        leading: ExerciseThumbnail(
+                          catalogExerciseId: m['exerciseId']?.toString() ?? m['id']?.toString(),
+                          exerciseName: m['name']?.toString(),
+                          size: 40,
+                        ),
                         title: Text(m['name']?.toString() ?? ''),
                         subtitle: Text(l10n.sessionsCount((m['sessionCount'] as num?)?.toInt() ?? 0)),
                       );

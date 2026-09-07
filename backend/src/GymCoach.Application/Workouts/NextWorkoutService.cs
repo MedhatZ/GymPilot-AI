@@ -14,7 +14,21 @@ public sealed record NextWorkoutDto(
     int EstimatedMinutes,
     string ProgramName,
     int ProgramVersion,
-    string Recommendation);
+    string Recommendation,
+    IReadOnlyList<NextWorkoutExerciseDto> Exercises);
+
+public sealed record NextWorkoutExerciseDto(
+    Guid Id,
+    Guid ExerciseId,
+    string ExerciseName,
+    int Order,
+    int Sets,
+    int MinReps,
+    int MaxReps,
+    decimal? StartingLoadKg,
+    int RestSeconds,
+    decimal? TargetRir,
+    decimal LoadIncrementKg);
 
 public interface INextWorkoutService
 {
@@ -65,6 +79,22 @@ public sealed class NextWorkoutService : INextWorkoutService
         }
 
         var est = Math.Max(30, nextDay.Exercises.Count * 8 + 10);
+        var exerciseDtos = nextDay.Exercises
+            .OrderBy(e => e.Order)
+            .Select(e => new NextWorkoutExerciseDto(
+                e.Id,
+                e.ExerciseId,
+                e.ExerciseName,
+                e.Order,
+                e.Sets,
+                e.MinReps,
+                e.MaxReps,
+                e.StartingLoadKg,
+                e.RestSeconds,
+                e.TargetRir,
+                2.5m))
+            .ToList();
+
         return new NextWorkoutDto(
             nextDay.Id,
             nextDay.Name,
@@ -74,7 +104,8 @@ public sealed class NextWorkoutService : INextWorkoutService
             est,
             program.Name,
             program.CurrentVersionNumber,
-            $"Recommended next session: {nextDay.Name}. Sequence continues even if you skipped a calendar day.");
+            $"Recommended next session: {nextDay.Name}. Sequence continues even if you skipped a calendar day.",
+            exerciseDtos);
     }
 }
 

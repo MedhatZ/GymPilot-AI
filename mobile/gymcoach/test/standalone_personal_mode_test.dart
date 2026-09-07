@@ -36,8 +36,12 @@ void main() {
         baselineBenchKg: bench,
       );
 
-  test('PersonalMode defaults to standalone (no backend required)', () {
-    expect(DefaultPersonalModeService(AppConfig.current).isEnabled, isTrue);
+  test('PersonalMode follows AppConfig (cloud or standalone)', () {
+    expect(
+      DefaultPersonalModeService(AppConfig.current).isEnabled,
+      AppConfig.current.personalMode,
+    );
+    expect(DefaultPersonalModeService(const AppConfig(personalMode: true)).isEnabled, isTrue);
   });
 
   test('standalone onboarding + program generation works with no network', () async {
@@ -52,7 +56,8 @@ void main() {
 
     expect(await onboarding.isOnboardingComplete(), isTrue);
     expect(program['endDateUtc'], isNull);
-    expect(program['name'], contains('Hypertrophy'));
+    expect(program['name'], 'GymCoach Program v1');
+    expect(program['currentVersionNumber'], 1);
     final days = program['days'] as List;
     expect(days, hasLength(4));
     final firstDay = Map<String, dynamic>.from(days.first as Map);

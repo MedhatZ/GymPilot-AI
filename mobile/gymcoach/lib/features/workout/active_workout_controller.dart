@@ -11,6 +11,7 @@ import '../../data/local/database_provider.dart';
 import '../../data/repositories/repository_contracts.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../data/sync/sync_service.dart';
+import '../../training/exercise_catalog.dart';
 import 'rest_timer_controller.dart';
 
 class ActiveWorkoutState {
@@ -54,6 +55,7 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkoutState> {
     this._sync,
     this._timer,
     this._workouts,
+    this._programs,
     this._personal,
   ) : super(const ActiveWorkoutState()) {
     restore();
@@ -64,6 +66,7 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkoutState> {
   final SyncService _sync;
   final RestTimerController _timer;
   final WorkoutSessionRepository _workouts;
+  final ProgramRepository _programs;
   final PersonalModeService _personal;
   final _uuid = const Uuid();
 
@@ -75,17 +78,74 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkoutState> {
       return;
     }
     final exercises = await _db.exercisesForSession(active.id);
+    final isPlaceholder = exercises.isEmpty ||
+        (exercises.length == 1 && exercises.first.exerciseName == 'Main lift');
+    if (isPlaceholder) {
+      await _deleteSessionCascade(active.id);
+      state = const ActiveWorkoutState(loading: false);
+      return;
+    }
     state = ActiveWorkoutState(session: active, exercises: exercises, loading: false);
+  }
+
+  Future<void> _deleteSessionCascade(String sessionId) async {
+    final exercises = await _db.exercisesForSession(sessionId);
+    for (final ex in exercises) {
+      await (_db.delete(_db.workoutSets)..where((s) => s.exerciseId.equals(ex.id))).go();
+    }
+    await (_db.delete(_db.workoutExercises)..where((e) => e.sessionId.equals(sessionId))).go();
+    await (_db.delete(_db.workoutSessions)..where((s) => s.id.equals(sessionId))).go();
   }
 
   Future<void> startFromRecommended({Map<String, dynamic>? readiness}) async {
     state = state.copyWith(loading: true, error: null);
     try {
-      final next = await _workouts.getNextWorkout();
-      final dayName = next?['dayName']?.toString() ?? 'Workout';
-      final programDayId = next?['programDayId']?.toString();
-      final programName = next?['programName']?.toString();
-      final exerciseMaps = (next?['exercises'] as List?) ?? [];
+      final existing = await _db.getActiveSession();
+      if (existing != null) {
+        final existingExercises = await _db.exercisesForSession(existing.id);
+        final isPlaceholder = existingExercises.isEmpty ||
+            (existingExercises.length == 1 && existingExercises.first.exerciseName == 'Main lift');
+        if (isPlaceholder) {
+          await _deleteSessionCascade(existing.id);
+        } else {
+          state = ActiveWorkoutState(session: existing, exercises: existingExercises, loading: false);
+          return;
+        }
+      }
+
+      var next = await _workouts.getNextWorkout();
+      var exerciseMaps = (next?['exercises'] as List?) ?? [];
+
+      // Older cloud /api/workouts/next omitted exercises — fill from active program day.
+      if (exerciseMaps.isEmpty && next?['programDayId'] != null) {
+        final program = await _programs.getActiveProgram();
+        final days = (program?['days'] as List?) ?? [];
+        for (final d in days) {
+          final day = Map<String, dynamic>.from(d as Map);
+          if (day['id']?.toString() == next!['programDayId']?.toString()) {
+            exerciseMaps = (day['exercises'] as List?) ?? [];
+            next = {
+              ...next,
+              'dayName': day['name'] ?? next['dayName'],
+              'programName': program?['name'] ?? next['programName'],
+              'exercises': exerciseMaps,
+            };
+            break;
+          }
+        }
+      }
+
+      if (next == null || exerciseMaps.isEmpty) {
+        state = state.copyWith(
+          loading: false,
+          error: 'No exercises in your program yet. Open Program and generate one first.',
+        );
+        return;
+      }
+
+      final dayName = next['dayName']?.toString() ?? 'Workout';
+      final programDayId = next['programDayId']?.toString();
+      final programName = next['programName']?.toString();
 
       final sessionId = _uuid.v4();
       await _db.createSession(WorkoutSessionsCompanion.insert(
@@ -110,16 +170,20 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkoutState> {
       for (var i = 0; i < exerciseMaps.length; i++) {
         final e = Map<String, dynamic>.from(exerciseMaps[i] as Map);
         final localId = _uuid.v4();
-        final catalogId = e['exerciseId']?.toString() ?? '';
+        final catalogId = e['exerciseId']?.toString() ?? e['catalogExerciseId']?.toString() ?? '';
         final name = e['exerciseName']?.toString() ?? 'Exercise';
         final sets = (e['sets'] as num?)?.toInt() ?? 3;
         final minReps = (e['minReps'] as num?)?.toInt() ?? 6;
         final maxReps = (e['maxReps'] as num?)?.toInt() ?? 8;
-        final increment = (e['loadIncrementKg'] as num?)?.toDouble() ?? 2.5;
+        final catalog = ExerciseCatalog.byId(catalogId) ??
+            ExerciseCatalog.byNameContains(name);
+        final increment = (e['loadIncrementKg'] as num?)?.toDouble() ??
+            catalog?.loadIncrementKg ??
+            2.5;
         final starting = (e['startingLoadKg'] as num?)?.toDouble();
 
         final suggestion = await _workouts.suggestLoad(
-          catalogExerciseId: catalogId,
+          catalogExerciseId: catalog?.id ?? catalogId,
           exerciseName: name,
           targetSets: sets,
           minReps: minReps,
@@ -131,7 +195,7 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkoutState> {
         await _db.createExercise(WorkoutExercisesCompanion.insert(
           id: localId,
           sessionId: sessionId,
-          serverExerciseId: Value(catalogId),
+          serverExerciseId: Value(catalog?.id ?? (catalogId.isEmpty ? null : catalogId)),
           exerciseName: name,
           position: i,
           targetSets: Value(sets),
@@ -144,22 +208,13 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkoutState> {
         ));
       }
 
-      if (exerciseMaps.isEmpty) {
-        await _db.createExercise(WorkoutExercisesCompanion.insert(
-          id: _uuid.v4(),
-          sessionId: sessionId,
-          exerciseName: 'Main lift',
-          position: 0,
-        ));
-      }
-
       final session = await (_db.select(_db.workoutSessions)..where((s) => s.id.equals(sessionId))).getSingle();
       final exercises = await _db.exercisesForSession(sessionId);
       state = ActiveWorkoutState(session: session, exercises: exercises, loading: false);
     } catch (e) {
       state = state.copyWith(
         loading: false,
-        error: 'Could not start workout from your local program. Finish Quick setup first.',
+        error: 'Could not start workout from your program. Finish Quick setup / generate program first.',
       );
     }
   }
@@ -289,6 +344,7 @@ final activeWorkoutProvider =
     ref.watch(syncServiceProvider),
     ref.watch(restTimerProvider),
     ref.watch(workoutSessionRepositoryProvider),
+    ref.watch(programRepositoryProvider),
     ref.watch(personalModeServiceProvider),
   );
 });

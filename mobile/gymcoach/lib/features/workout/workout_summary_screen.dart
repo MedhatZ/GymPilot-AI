@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:gymcoach/l10n/app_localizations.dart';
 
 import '../../data/repositories/repository_providers.dart';
+import 'exercise_thumbnail.dart';
 
 class WorkoutSummaryScreen extends ConsumerWidget {
   const WorkoutSummaryScreen({super.key, required this.sessionClientId});
@@ -49,6 +50,11 @@ class WorkoutSummaryScreen extends ConsumerWidget {
                   final change = m['changePercent'];
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
+                    leading: ExerciseThumbnail(
+                      catalogExerciseId: m['exerciseId']?.toString() ?? m['catalogExerciseId']?.toString(),
+                      exerciseName: m['exerciseName']?.toString(),
+                      size: 44,
+                    ),
                     title: Text(m['exerciseName']?.toString() ?? ''),
                     subtitle: Text('e1RM ${m['currentBestE1rm']} (prev ${m['previousBestE1rm'] ?? '—'})'),
                     trailing: change == null ? null : Text('${change > 0 ? '+' : ''}$change%'),

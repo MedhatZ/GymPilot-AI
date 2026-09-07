@@ -12,7 +12,6 @@ class LocalProgramGenerator {
   GeneratedProgram generate(OnboardingInput input) {
     final daysPerWeek = input.trainingDaysPerWeek.clamp(2, 6);
     final split = _chooseSplit(daysPerWeek);
-    final goalName = _goalLabel(input.primaryGoal);
     final programId = _uuid.v4();
     final injury = (input.injuryNotes ?? '').toLowerCase();
 
@@ -40,13 +39,13 @@ class LocalProgramGenerator {
 
     return GeneratedProgram(
       id: programId,
-      name: '$goalName Program',
+      name: 'GymCoach Program v1',
       status: 'Active',
       startDateUtc: DateTime.now().toUtc(),
       endDateUtc: null,
       currentVersionNumber: 1,
       reason:
-          'Generated on-device from your profile, goals, schedule, and equipment. No calendar end date.',
+          'Baseline GymCoach Program v1 — generated on-device from your profile, goals, schedule, and equipment. Continues while you progress; no calendar end date.',
       days: days,
     );
   }
@@ -190,14 +189,6 @@ class LocalProgramGenerator {
       _ => (sets: compound ? 3 : 3, min: 8, max: 12, rir: 2, rest: compound ? 120 : 75),
     };
   }
-
-  String _goalLabel(int goal) => switch (goal) {
-        1 => 'Strength',
-        2 => 'Strength + Hypertrophy',
-        3 => 'Body Recomp',
-        4 => 'General Fitness',
-        _ => 'Hypertrophy',
-      };
 }
 
 class _DayPlan {

@@ -70,7 +70,7 @@ public sealed class ProgramGenerationService : IProgramGenerationService
         var program = new ProgramEntity
         {
             AthleteProfileId = profile.Id,
-            Name = $"{goal} Program",
+            Name = "GymCoach Program v1",
             Status = ProgramStatus.Active,
             StartDateUtc = DateTime.UtcNow,
             EndDateUtc = null
@@ -83,7 +83,7 @@ public sealed class ProgramGenerationService : IProgramGenerationService
             ProgramId = program.Id,
             VersionNumber = 1,
             Trigger = "InitialGeneration",
-            Reason = "Initial program generated from athlete profile and goals. No calendar expiration.",
+            Reason = "Baseline GymCoach Program v1 from athlete profile and goals. Continues while you progress; no calendar expiration.",
             IsDeload = false
         };
         _db.ProgramVersions.Add(version);

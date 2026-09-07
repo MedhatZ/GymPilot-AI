@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gymcoach/l10n/app_localizations.dart';
 
 import '../../data/repositories/repository_providers.dart';
+import '../workout/exercise_thumbnail.dart';
 
 final programProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   return ref.watch(programRepositoryProvider).getActiveProgram();
@@ -44,6 +45,11 @@ class ProgramScreen extends ConsumerWidget {
                     children: exercises.map((e) {
                       final ex = Map<String, dynamic>.from(e as Map);
                       return ListTile(
+                        leading: ExerciseThumbnail(
+                          catalogExerciseId: ex['exerciseId']?.toString() ?? ex['catalogExerciseId']?.toString(),
+                          exerciseName: ex['exerciseName']?.toString(),
+                          size: 48,
+                        ),
                         title: Text(ex['exerciseName']?.toString() ?? ''),
                         subtitle: Text(
                           '${ex['sets']} × ${ex['minReps']}-${ex['maxReps']} · rest ${ex['restSeconds']}s'

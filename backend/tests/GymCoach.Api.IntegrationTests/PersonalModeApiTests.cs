@@ -57,6 +57,8 @@ public class PersonalModeApiTests : IClassFixture<WebApplicationFactory<Program>
         next.EnsureSuccessStatusCode();
         var nextBody = await next.Content.ReadAsStringAsync();
         Assert.Contains("programDayId", nextBody, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("exercises", nextBody, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("exerciseName", nextBody, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class AuthDto

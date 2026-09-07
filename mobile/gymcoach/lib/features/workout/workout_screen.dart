@@ -9,6 +9,7 @@ import '../../core/config/personal_mode_service.dart';
 import '../../data/local/app_database.dart';
 import '../../data/local/database_provider.dart';
 import 'active_workout_controller.dart';
+import 'exercise_thumbnail.dart';
 import 'rest_timer_controller.dart';
 
 class WorkoutScreen extends ConsumerStatefulWidget {
@@ -91,7 +92,7 @@ class _WorkoutScreenState extends ConsumerState<WorkoutScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             SizedBox(
-              height: 44,
+              height: 48,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: state.exercises.length,
@@ -100,6 +101,12 @@ class _WorkoutScreenState extends ConsumerState<WorkoutScreen> {
                   final e = state.exercises[i];
                   final selected = i == state.currentExerciseIndex;
                   return ChoiceChip(
+                    avatar: ExerciseThumbnail(
+                      catalogExerciseId: e.serverExerciseId,
+                      exerciseName: e.exerciseName,
+                      size: 28,
+                      borderRadius: 6,
+                    ),
                     label: Text(e.exerciseName),
                     selected: selected,
                     onSelected: (_) {
@@ -115,10 +122,29 @@ class _WorkoutScreenState extends ConsumerState<WorkoutScreen> {
             ),
             const SizedBox(height: 16),
             if (ex != null) ...[
-              Text(ex.exerciseName, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-              if (ex.substitutedFromName != null)
-                Text(l10n.substitutedFrom(ex.substitutedFromName!), style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(height: 4),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ExerciseThumbnail(
+                    catalogExerciseId: ex.serverExerciseId,
+                    exerciseName: ex.exerciseName,
+                    size: 72,
+                    borderRadius: 12,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(ex.exerciseName, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                        if (ex.substitutedFromName != null)
+                          Text(l10n.substitutedFrom(ex.substitutedFromName!), style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (ex.substitutedFromName == null) const SizedBox(height: 4),
               Text(l10n.targetSetsReps(ex.targetSets, ex.minReps, ex.maxReps)),
               Text(l10n.suggestedWeight(ex.suggestedWeight?.toStringAsFixed(1) ?? '—')),
               if (ex.previousPerformanceJson != null)

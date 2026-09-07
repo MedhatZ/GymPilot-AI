@@ -6,6 +6,7 @@ class CatalogExercise {
     required this.pattern,
     required this.isCompound,
     this.loadIncrementKg = 2.5,
+    this.imageAsset,
   });
 
   final String id;
@@ -13,6 +14,11 @@ class CatalogExercise {
   final String pattern;
   final bool isCompound;
   final double loadIncrementKg;
+
+  /// Optional thumbnail under `assets/exercises/`.
+  final String? imageAsset;
+
+  String get resolvedImageAsset => imageAsset ?? 'assets/exercises/$id.png';
 }
 
 class ExerciseCatalog {
@@ -50,6 +56,25 @@ class ExerciseCatalog {
     final n = needle.toLowerCase();
     for (final e in all) {
       if (e.name.toLowerCase().contains(n)) return e;
+    }
+    return null;
+  }
+
+  static String? imageAssetFor({String? catalogExerciseId, String? exerciseName}) {
+    if (catalogExerciseId != null && catalogExerciseId.isNotEmpty) {
+      final byId = ExerciseCatalog.byId(catalogExerciseId);
+      if (byId != null) return byId.resolvedImageAsset;
+    }
+    if (exerciseName != null && exerciseName.trim().isNotEmpty) {
+      final needle = exerciseName.trim().toLowerCase();
+      for (final e in all) {
+        if (e.name.toLowerCase() == needle) return e.resolvedImageAsset;
+      }
+      for (final e in all) {
+        if (needle.contains(e.name.toLowerCase()) || e.name.toLowerCase().contains(needle)) {
+          return e.resolvedImageAsset;
+        }
+      }
     }
     return null;
   }
